@@ -1,0 +1,125 @@
+<html>
+<body>
+<style>
+    #outgoing {
+        width: 600px;
+        word-wrap: break-word;
+        white-space: normal;
+    }
+</style>
+<form>
+    <textarea id="incoming"></textarea>
+     <button type="submit">submit</button>
+</form>
+<pre id="outgoing"></pre>
+<video style="width: 300px;height: 200px"></video>
+<script src="simplepeer.min.js"></script>
+<script>
+
+    const socket = new WebSocket('ws://192.168.3.121:7001');
+    this.socket=socket
+    // Connection opened
+    socket.addEventListener('open', function (event) {
+        console.log(event,'open');
+        // setTimeout(()=>{
+        //     socket.send('Hello Server!');
+        // },1000)
+        // console.log('open from server ', event.data);
+    });
+
+    // Listen for messages
+    socket.addEventListener('message',   (event) =>{
+        let data=JSON.parse(event.data)
+        console.log('Message  ', data,data.type);
+
+        // let url=window.URL.createObjectURL(new Blob([data]))
+        data.type&&this.peer2.signal(data)
+    });
+    socket.addEventListener('close', function (event) {
+        console.log('close ', event);
+    });
+    
+    navigator.mediaDevices.enumerateDevices()
+        .then(function(devices) {
+            devices.forEach(function(device) {
+                console.log(device.kind + ": " + device.label +
+                    " id = " + device.deviceId);
+                return
+                navigator.mediaDevices.getUserMedia({
+                    video: {
+                        mandatory: {
+                            chromeMediaSource: 'desktop',
+                            chromeMediaSourceId: device.deviceId,
+                            minWidth: 500,
+                            maxWidth: 1000,
+                            minHeight: 400,
+                            maxHeight: 800
+                        }
+                    },
+                    audio: true
+                }).then(gotMedia).catch(() => {})
+
+            });
+            
+        })
+        .catch(function(err) {
+            console.log(err.name + ": " + err.message);
+        });
+
+    function gotMedia (stream) {
+        var peer1 = new SimplePeer({ initiator: true, stream: stream })
+        var peer2 = new SimplePeer()
+
+        peer1.on('signal', data => {
+            peer2.signal(data)
+        })
+
+        peer2.on('signal', data => {
+            peer1.signal(data)
+        })
+
+        peer2.on('stream', stream => {
+            // got remote video stream, now let's show it in a video tag
+            var video = document.querySelector('video')
+
+            if ('srcObject' in video) {
+                video.srcObject = stream
+            } else {
+                video.src = window.URL.createObjectURL(stream) // for older browsers
+            }
+
+            video.play()
+        })
+    }
+    
+    const p = new SimplePeer({
+        initiator: location.hash === '#1',
+        trickle: false
+    })
+
+    p.on('error', err => console.log('error', err))
+
+    p.on('signal', data => {
+        console.log('SIGNAL', JSON.stringify(data))
+        document.querySelector('#outgoing').textContent = JSON.stringify(data)
+    })
+
+    document.querySelector('form').addEventListener('submit', ev => {
+        ev.preventDefault()
+        console.log(p.signal);
+        let s=document.querySelector('#incoming').value
+         p.signal({s})
+        // p.signal(JSON.parse(document.querySelector('#incoming').value))
+    })
+
+    p.on('connect', () => {
+        console.log('CONNECT')
+        p.send('whatever' + Math.random())
+    })
+
+    p.on('data', data => {
+        console.log('data: ' + data)
+    })
+</script>
+</body>
+</html>
